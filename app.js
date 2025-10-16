@@ -133,33 +133,24 @@ async function handlePhotoSelection(event) {
     selectedPhotos = [];
     photoPreviews.innerHTML = '';
 
-    for (const file of files) {
+    const promises = files.map(async (file) => {
         if (file.type.startsWith('image/')) {
             const orientation = await getImageOrientation(file);
-            const img = new Image();
-            img.onload = function() {
-                const correctedDataURL = correctImageOrientation(img, orientation);
-                selectedPhotos.push(correctedDataURL);
-
-                // Crear preview
-                const previewDiv = document.createElement('div');
-                previewDiv.className = 'me-2 mb-2';
-                previewDiv.innerHTML = `
-                    <img src="${correctedDataURL}" class="img-thumbnail" style="width: 100px; height: 100px; object-fit: cover;">
-                    <button class="btn btn-sm btn-danger mt-1 remove-photo" data-index="${selectedPhotos.length - 1}">Eliminar</button>
-                `;
-                photoPreviews.appendChild(previewDiv);
-
-                // Event listener para eliminar foto
-                previewDiv.querySelector('.remove-photo').addEventListener('click', function() {
-                    const index = parseInt(this.getAttribute('data-index'));
-                    selectedPhotos.splice(index, 1);
-                    updatePreviews();
-                });
-            };
-            img.src = URL.createObjectURL(file);
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = function() {
+                    const correctedDataURL = correctImageOrientation(img, orientation);
+                    resolve(correctedDataURL);
+                };
+                img.src = URL.createObjectURL(file);
+            });
         }
-    }
+    });
+
+    selectedPhotos = await Promise.all(promises.filter(p => p)); // Filter out undefined for non-image files
+
+    // Crear previews después de cargar todas las imágenes
+    updatePreviews();
 }
 
 // Función para actualizar previews después de eliminar
@@ -196,33 +187,32 @@ async function downloadPDF() {
     }
 
     const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF();
+    const pdf = new jsPDF({ unit: 'mm' }); // Usar mm para consistencia
 
-    // Cargar la imagen del reporte
     try {
         const reportImageData = await getBase64Image('reporte.jpg');
 
-        // Agregar la imagen del reporte al PDF (tamaño A4 aproximado)
-        pdf.addImage(reportImageData, 'JPEG', 0, 0, 210, 297); // A4 size in mm
+        // Agregar la imagen del reporte al PDF (tamaño A4 en mm)
+        pdf.addImage(reportImageData, 'JPEG', 0, 0, 210, 297);
 
         // Agregar el nombre en la posición del campo nombre (ajustar coordenadas según la imagen)
         pdf.setFontSize(12);
-        pdf.text(name, 60, 67); // Ajustar x=20, y=50 según la posición del campo nombre en la imagen
+        pdf.text(name, 60, 67); // Ajustar x=60, y=67 según la posición del campo nombre en la imagen
 
         // Agregar la firma como imagen superpuesta justo arriba de la línea de FIRMA DECLARANTE
         const signatureData = signaturePad.toDataURL('image/png');
-        pdf.addImage(signatureData, 'PNG', 20, 225, 80, 20); // Ajustado: x=20, y=230, ancho=80, alto=25
+        pdf.addImage(signatureData, 'PNG', 20, 225, 80, 20); // Ajustado: x=20, y=225, ancho=80, alto=20
 
         // Agregar fotos en nuevas páginas si hay fotos seleccionadas
         if (selectedPhotos.length > 0) {
-            const evidenciaImage = await getBase64Image('reporteevidencia.jpg'); // Asumiendo que existe este archivo
+            const evidenciaImage = await getBase64Image('reporteevidencia.jpg');
             const imagesPerPage = 4;
-            const marginTop = 120;
-            const marginBottom = 50;
-            const marginLeft = 60;
-            const marginRight = 30;
-            const pageWidth = 565;
-            const pageHeight = 792;
+            const marginTop = 30;
+            const marginBottom = 20;
+            const marginLeft = 20;
+            const marginRight = 20;
+            const pageWidth = 210;
+            const pageHeight = 297;
             const usableWidth = pageWidth - marginLeft - marginRight;
             const usableHeight = pageHeight - marginTop - marginBottom;
 
@@ -231,14 +221,34 @@ async function downloadPDF() {
                 pdf.addImage(evidenciaImage, 'JPEG', 0, 0, pageWidth, pageHeight);
                 const numPhotos = Math.min(imagesPerPage, selectedPhotos.length - i);
                 if (numPhotos === 1) {
-                    // Una foto ocupa el máximo espacio
-                    pdf.addImage(selectedPhotos[i], 'JPEG', marginLeft, marginTop, usableWidth, usableHeight);
+                    // Una foto ocupa tamaño grande centrado
+                    const imgWidth = 120;
+                    const imgHeight = 80;
+                    const startX = marginLeft + (usableWidth - imgWidth) / 2;
+                    const startY = marginTop + (usableHeight - imgHeight) / 2;
+                    pdf.addImage(selectedPhotos[i], 'JPEG', startX, startY, imgWidth, imgHeight);
+                } else if (numPhotos === 2) {
+                    // Dos fotos en formato de grid horizontal
+                    const cols = 2;
+                    const rows = 1;
+                    const cellWidth = 80;
+                    const cellHeight = 60;
+                    const totalGridWidth = cols * cellWidth;
+                    const totalGridHeight = rows * cellHeight;
+                    const startX = marginLeft + (usableWidth - totalGridWidth) / 2;
+                    const startY = marginTop + (usableHeight - totalGridHeight) / 2;
+                    for (let j = 0; j < numPhotos; j++) {
+                        const imgData = selectedPhotos[i + j];
+                        const x = startX + (j % cols) * cellWidth;
+                        const y = startY + Math.floor(j / cols) * cellHeight;
+                        pdf.addImage(imgData, 'JPEG', x, y, cellWidth, cellHeight);
+                    }
                 } else {
-                    // Múltiples fotos en grid uniforme centrado
+                    // Tres o cuatro fotos en grid de 2x2 con tamaño reducido
                     const cols = 2;
                     const rows = 2;
-                    const cellWidth = usableWidth / cols;
-                    const cellHeight = usableHeight / rows;
+                    const cellWidth = 60;
+                    const cellHeight = 40;
                     const totalGridWidth = cols * cellWidth;
                     const totalGridHeight = rows * cellHeight;
                     const startX = marginLeft + (usableWidth - totalGridWidth) / 2;
