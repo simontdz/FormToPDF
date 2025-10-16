@@ -28,6 +28,11 @@
             <input type="text" id="name" class="form-control" placeholder="Ingresa tu nombre">
         </div>
         <canvas id="signature-pad" class="mb-3" width="400" height="200"></canvas>
+        <div class="mb-3">
+            <label for="fotos" class="form-label">Agregar Fotos</label>
+            <input type="file" class="form-control" id="fotos" accept="image/*" multiple>
+        </div>
+        <div id="photo-previews" class="mb-3 d-flex flex-wrap justify-content-center"></div>
         <div class="buttons">
             <button id="clear" class="btn btn-secondary me-2">Limpiar</button>
             <button id="download-pdf" class="btn btn-primary">Descargar PDF</button>
