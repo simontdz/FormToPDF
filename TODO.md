@@ -1,0 +1,3 @@
+- [x] Agregar input de archivos para fotos en index.html
+- [x] Modificar app.js para manejar las fotos seleccionadas y agregar nuevas páginas al PDF
+- [x] Probar la funcionalidad
