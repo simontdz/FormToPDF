@@ -130,6 +130,27 @@ function correctImageOrientation(img, orientation) {
     return canvas.toDataURL('image/jpeg');
 }
 
+// Función para girar imagen 90 grados en sentido horario
+function rotateImage(dataURL) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = img.height;
+            canvas.height = img.width;
+            ctx.translate(img.height, 0);
+            ctx.rotate(Math.PI / 2);
+            ctx.drawImage(img, 0, 0);
+            resolve(canvas.toDataURL('image/jpeg'));
+        };
+        img.onerror = function() {
+            reject(new Error('Failed to load image for rotating'));
+        };
+        img.src = dataURL;
+    });
+}
+
 // Función para manejar selección de fotos
 async function handlePhotoSelection(event) {
     const files = Array.from(event.target.files);
@@ -148,14 +169,21 @@ async function handlePhotoSelection(event) {
                     };
                     img.onerror = function() {
                         console.error('Error loading image:', file.name);
-                        resolve(URL.createObjectURL(file)); // Fallback to original
+                        // Fallback: use original file as dataURL
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.readAsDataURL(file);
                     };
                     img.src = URL.createObjectURL(file);
                 });
             } catch (error) {
                 console.error('Error processing file:', file.name, error);
-                // Fallback: use original file without orientation correction
-                return URL.createObjectURL(file);
+                // Fallback: use original file as dataURL to avoid CORS issues
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.readAsDataURL(file);
+                });
             }
         }
     });
@@ -174,7 +202,8 @@ function updatePreviews() {
         previewDiv.className = 'me-2 mb-2';
         previewDiv.innerHTML = `
             <img src="${dataURL}" class="img-thumbnail" style="width: 100px; height: 100px; object-fit: cover;">
-            <button class="btn btn-sm btn-danger mt-1 remove-photo" data-index="${index}">Eliminar</button>
+            <button type="button" class="btn btn-sm btn-danger mt-1 remove-photo" data-index="${index}">Eliminar</button>
+            <button type="button" class="btn btn-sm btn-warning mt-1 flip-photo" data-index="${index}">Girar</button>
         `;
         photoPreviews.appendChild(previewDiv);
 
@@ -182,6 +211,16 @@ function updatePreviews() {
             const idx = parseInt(this.getAttribute('data-index'));
             selectedPhotos.splice(idx, 1);
             updatePreviews();
+        });
+
+        previewDiv.querySelector('.flip-photo').addEventListener('click', async function() {
+            const idx = parseInt(this.getAttribute('data-index'));
+            try {
+                selectedPhotos[idx] = await rotateImage(selectedPhotos[idx]);
+                updatePreviews();
+            } catch (error) {
+                console.error('Error flipping image:', error);
+            }
         });
     });
 }
@@ -295,18 +334,18 @@ async function downloadPDF() {
                 pdf.addImage(evidenciaImage, 'JPEG', 0, 0, pageWidth, pageHeight);
                 const numPhotos = Math.min(imagesPerPage, selectedPhotos.length - i);
                 if (numPhotos === 1) {
-                    // Una foto ocupa tamaño grande centrado, maximizado
-                    const imgWidth = 150;
-                    const imgHeight = 100;
+                    // Una foto ocupa tamaño grande centrado, maximizado aprovechando toda la hoja
+                    const imgWidth = 170;
+                    const imgHeight = 220;
                     const startX = marginLeft + (usableWidth - imgWidth) / 2;
                     const startY = marginTop + (usableHeight - imgHeight) / 2;
                     pdf.addImage(selectedPhotos[i], 'JPEG', startX, startY, imgWidth, imgHeight);
                 } else if (numPhotos === 2) {
-                    // Dos fotos en formato de grid horizontal, agrandadas
+                    // Dos fotos en formato de grid horizontal, agrandadas aprovechando toda la hoja
                     const cols = 2;
                     const rows = 1;
-                    const cellWidth = 100;
-                    const cellHeight = 75;
+                    const cellWidth = 85;
+                    const cellHeight = 220;
                     const totalGridWidth = cols * cellWidth;
                     const totalGridHeight = rows * cellHeight;
                     const startX = marginLeft + (usableWidth - totalGridWidth) / 2;
@@ -318,11 +357,11 @@ async function downloadPDF() {
                         pdf.addImage(imgData, 'JPEG', x, y, cellWidth, cellHeight);
                     }
                 } else {
-                    // Tres o cuatro fotos en grid de 2x2, agrandadas
+                    // Tres o cuatro fotos en grid de 2x2, agrandadas aprovechando toda la hoja
                     const cols = 2;
                     const rows = 2;
-                    const cellWidth = 80;
-                    const cellHeight = 60;
+                    const cellWidth = 85;
+                    const cellHeight = 100;
                     const totalGridWidth = cols * cellWidth;
                     const totalGridHeight = rows * cellHeight;
                     const startX = marginLeft + (usableWidth - totalGridWidth) / 2;
