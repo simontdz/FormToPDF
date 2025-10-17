@@ -6,6 +6,9 @@ const signaturePad = new SignaturePad(canvas, {
     penColor: 'rgb(0,0,0)'
 });
 
+// Set default date to today
+document.getElementById('datetime').value = new Date().toISOString().slice(0, 10);
+
 // Variables para fotos
 let selectedPhotos = [];
 const photoPreviews = document.getElementById('photo-previews');
@@ -175,16 +178,33 @@ function updatePreviews() {
 
 // Función para manejar el botón Descargar PDF
 async function downloadPDF() {
-    if (signaturePad.isEmpty()) {
-        alert('Por favor, firma antes de descargar el PDF.');
-        return;
-    }
-
     const name = document.getElementById('name').value.trim();
-    if (!name) {
-        alert('Por favor, ingresa tu nombre.');
-        return;
-    }
+
+    const rut = document.getElementById('rut').value.trim();
+
+    const area = document.getElementById('area').value.trim();
+
+    const sede = document.getElementById('sede').value.trim();
+
+    const datetime = document.getElementById('datetime').value;
+
+    const tipoIncidente = document.querySelector('input[name="tipoIncidente"]:checked');
+
+    const descripcion = document.getElementById('descripcion').value.trim();
+
+    const tipo = document.getElementById('tipo').value.trim();
+
+    const ubicacion = document.getElementById('ubicacion').value.trim();
+
+    const dia = document.getElementById('dia').value.trim();
+
+    const horario = document.getElementById('horario').value.trim();
+
+    const patente = document.getElementById('patente').value.trim();
+
+    const declarante = document.getElementById('declarante').value.trim();
+
+    const supervisor = document.getElementById('supervisor').value.trim();
 
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit: 'mm' }); // Usar mm para consistencia
@@ -195,13 +215,57 @@ async function downloadPDF() {
         // Agregar la imagen del reporte al PDF (tamaño A4 en mm)
         pdf.addImage(reportImageData, 'JPEG', 0, 0, 210, 297);
 
-        // Agregar el nombre en la posición del campo nombre (ajustar coordenadas según la imagen)
         pdf.setFontSize(12);
-        pdf.text(name, 60, 67); // Ajustar x=60, y=67 según la posición del campo nombre en la imagen
+        pdf.text(name, 60, 68);
 
-        // Agregar la firma como imagen superpuesta justo arriba de la línea de FIRMA DECLARANTE
-        const signatureData = signaturePad.toDataURL('image/png');
-        pdf.addImage(signatureData, 'PNG', 20, 225, 80, 20); // Ajustado: x=20, y=225, ancho=80, alto=20
+        pdf.text(rut, 60, 73);
+
+        pdf.text(area, 60, 79);
+
+        pdf.text(sede, 60, 85);
+
+        pdf.text(tipo, 60, 120);
+
+        pdf.text(ubicacion, 60, 128);
+
+        pdf.text(dia, 60, 136);
+
+        pdf.text(horario, 60, 145);
+
+        pdf.text(patente,147, 120);
+
+        pdf.text(declarante, 45, 258.5)
+
+        pdf.text(supervisor, 130, 258.5)
+
+        // Add date to PDF in dd-mm-yyyy format
+        const [year, month, day] = datetime.split('-');
+        const formattedDate = `${day}-${month}-${year}`;
+        pdf.text(formattedDate, 142, 59);
+
+        // Add radio button selection to PDF
+        if (tipoIncidente.value === '0') {
+            pdf.text('X', 150, 72); // Position for value 0, a bit higher
+        } else if (tipoIncidente.value === '1') {
+            pdf.text('X', 150, 78); // Position for value 1, a bit lower
+        }
+
+        // Add description to PDF with automatic text wrapping
+        if (descripcion) {
+            const maxWidth = 160;
+            const lines = pdf.splitTextToSize(descripcion, maxWidth);
+            // Define y positions for each of the 11 lines
+            const yPositions = [164, 170, 175, 181, 186, 192, 197, 203, 208, 214, 220];
+            for (let i = 0; i < lines.length && i < yPositions.length; i++) {
+                pdf.text(lines[i], 30, yPositions[i]);
+            }
+        }
+
+        // Agregar la firma como imagen superpuesta justo arriba de la línea de FIRMA DECLARANTE solo si no está vacía
+        if (!signaturePad.isEmpty()) {
+            const signatureData = signaturePad.toDataURL('image/png');
+            pdf.addImage(signatureData, 'PNG', 20, 225, 80, 20); // Ajustado: x=20, y=225, ancho=80, alto=20
+        }
 
         // Agregar fotos en nuevas páginas si hay fotos seleccionadas
         if (selectedPhotos.length > 0) {
