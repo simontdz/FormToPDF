@@ -295,18 +295,18 @@ async function downloadPDF() {
                 pdf.addImage(evidenciaImage, 'JPEG', 0, 0, pageWidth, pageHeight);
                 const numPhotos = Math.min(imagesPerPage, selectedPhotos.length - i);
                 if (numPhotos === 1) {
-                    // Una foto ocupa tamaño grande centrado
-                    const imgWidth = 120;
-                    const imgHeight = 80;
+                    // Una foto ocupa tamaño grande centrado, maximizado
+                    const imgWidth = 150;
+                    const imgHeight = 100;
                     const startX = marginLeft + (usableWidth - imgWidth) / 2;
                     const startY = marginTop + (usableHeight - imgHeight) / 2;
                     pdf.addImage(selectedPhotos[i], 'JPEG', startX, startY, imgWidth, imgHeight);
                 } else if (numPhotos === 2) {
-                    // Dos fotos en formato de grid horizontal
+                    // Dos fotos en formato de grid horizontal, agrandadas
                     const cols = 2;
                     const rows = 1;
-                    const cellWidth = 80;
-                    const cellHeight = 60;
+                    const cellWidth = 100;
+                    const cellHeight = 75;
                     const totalGridWidth = cols * cellWidth;
                     const totalGridHeight = rows * cellHeight;
                     const startX = marginLeft + (usableWidth - totalGridWidth) / 2;
@@ -318,11 +318,11 @@ async function downloadPDF() {
                         pdf.addImage(imgData, 'JPEG', x, y, cellWidth, cellHeight);
                     }
                 } else {
-                    // Tres o cuatro fotos en grid de 2x2 con tamaño reducido
+                    // Tres o cuatro fotos en grid de 2x2, agrandadas
                     const cols = 2;
                     const rows = 2;
-                    const cellWidth = 60;
-                    const cellHeight = 40;
+                    const cellWidth = 80;
+                    const cellHeight = 60;
                     const totalGridWidth = cols * cellWidth;
                     const totalGridHeight = rows * cellHeight;
                     const startX = marginLeft + (usableWidth - totalGridWidth) / 2;
