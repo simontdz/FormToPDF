@@ -138,15 +138,25 @@ async function handlePhotoSelection(event) {
 
     const promises = files.map(async (file) => {
         if (file.type.startsWith('image/')) {
-            const orientation = await getImageOrientation(file);
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.onload = function() {
-                    const correctedDataURL = correctImageOrientation(img, orientation);
-                    resolve(correctedDataURL);
-                };
-                img.src = URL.createObjectURL(file);
-            });
+            try {
+                const orientation = await getImageOrientation(file);
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    img.onload = function() {
+                        const correctedDataURL = correctImageOrientation(img, orientation);
+                        resolve(correctedDataURL);
+                    };
+                    img.onerror = function() {
+                        console.error('Error loading image:', file.name);
+                        resolve(URL.createObjectURL(file)); // Fallback to original
+                    };
+                    img.src = URL.createObjectURL(file);
+                });
+            } catch (error) {
+                console.error('Error processing file:', file.name, error);
+                // Fallback: use original file without orientation correction
+                return URL.createObjectURL(file);
+            }
         }
     });
 
