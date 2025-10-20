@@ -15,11 +15,15 @@ const photoPreviews = document.getElementById('photo-previews');
 
 // Ajustar el tamaño del canvas para que coincida con el CSS
 function resizeCanvas() {
+    const data = signaturePad.toData(); // Guardar datos de la firma antes de redimensionar
     const ratio = Math.max(window.devicePixelRatio || 1, 1);
     canvas.width = canvas.offsetWidth * ratio;
     canvas.height = canvas.offsetHeight * ratio;
     canvas.getContext('2d').scale(ratio, ratio);
     signaturePad.clear(); // Limpiar después de redimensionar
+    if (data.length > 0) {
+        signaturePad.fromData(data); // Restaurar datos de la firma si existían
+    }
 }
 
 window.addEventListener('resize', resizeCanvas);
