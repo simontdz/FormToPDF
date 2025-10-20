@@ -1,3 +1,4 @@
-# TODO List for Adding Responsive Header with Logos
-
-- [x] Add a responsive header section to index.html that includes the logos (logo RC.png, Ollagua Logo - copia.png, Ollagua Logo.png) using Bootstrap classes for responsiveness.
+- [ ] Modificar selectedPhotos a array de objetos {dataURL, width, height}
+- [ ] Actualizar handlePhotoSelection para incluir width y height
+- [ ] Actualizar updatePreviews para usar dataURL del objeto
+- [ ] Actualizar downloadPDF para escalar y centrar imágenes en el grid de 2 fotos

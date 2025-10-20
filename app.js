@@ -10,7 +10,7 @@ const signaturePad = new SignaturePad(canvas, {
 document.getElementById('datetime').value = new Date().toISOString().slice(0, 10);
 
 // Variables para fotos
-let selectedPhotos = [];
+let selectedPhotos = []; // Ahora será array de objetos {dataURL, width, height}
 const photoPreviews = document.getElementById('photo-previews');
 
 // Ajustar el tamaño del canvas para que coincida con el CSS
@@ -50,7 +50,7 @@ function clearSignature() {
 function getImageOrientation(file) {
     return new Promise((resolve) => {
         const reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = function (e) {
             const view = new DataView(e.target.result);
             if (view.getUint16(0, false) != 0xFFD8) {
                 resolve(1); // No es JPEG
@@ -59,7 +59,7 @@ function getImageOrientation(file) {
             const length = view.byteLength;
             let offset = 2;
             while (offset < length) {
-                if (view.getUint16(offset+2, false) <= 8) break;
+                if (view.getUint16(offset + 2, false) <= 8) break;
                 const marker = view.getUint16(offset, false);
                 offset += 2;
                 if (marker == 0xFFE1) {
@@ -138,7 +138,7 @@ function correctImageOrientation(img, orientation) {
 function rotateImage(dataURL) {
     return new Promise((resolve, reject) => {
         const img = new Image();
-        img.onload = function() {
+        img.onload = function () {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             canvas.width = img.height;
@@ -148,7 +148,7 @@ function rotateImage(dataURL) {
             ctx.drawImage(img, 0, 0);
             resolve(canvas.toDataURL('image/jpeg'));
         };
-        img.onerror = function() {
+        img.onerror = function () {
             reject(new Error('Failed to load image for rotating'));
         };
         img.src = dataURL;
@@ -167,25 +167,37 @@ async function handlePhotoSelection(event) {
                 const orientation = await getImageOrientation(file);
                 return new Promise((resolve) => {
                     const img = new Image();
-                    img.onload = function() {
+                    img.onload = function () {
                         const correctedDataURL = correctImageOrientation(img, orientation);
-                        resolve(correctedDataURL);
+                        resolve({ dataURL: correctedDataURL, width: img.width, height: img.height });
                     };
-                    img.onerror = function() {
+                    img.onerror = function () {
                         console.error('Error loading image:', file.name);
-                        // Fallback: use original file as dataURL
+                        // Fallback: use original file as dataURL and get dimensions
                         const reader = new FileReader();
-                        reader.onload = () => resolve(reader.result);
+                        reader.onload = () => {
+                            const fallbackImg = new Image();
+                            fallbackImg.onload = () => {
+                                resolve({ dataURL: reader.result, width: fallbackImg.width, height: fallbackImg.height });
+                            };
+                            fallbackImg.src = reader.result;
+                        };
                         reader.readAsDataURL(file);
                     };
                     img.src = URL.createObjectURL(file);
                 });
             } catch (error) {
                 console.error('Error processing file:', file.name, error);
-                // Fallback: use original file as dataURL to avoid CORS issues
+                // Fallback: use original file as dataURL and get dimensions
                 return new Promise((resolve) => {
                     const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result);
+                    reader.onload = () => {
+                        const fallbackImg = new Image();
+                        fallbackImg.onload = () => {
+                            resolve({ dataURL: reader.result, width: fallbackImg.width, height: fallbackImg.height });
+                        };
+                        fallbackImg.src = reader.result;
+                    };
                     reader.readAsDataURL(file);
                 });
             }
@@ -201,27 +213,33 @@ async function handlePhotoSelection(event) {
 // Función para actualizar previews después de eliminar
 function updatePreviews() {
     photoPreviews.innerHTML = '';
-    selectedPhotos.forEach((dataURL, index) => {
+    selectedPhotos.forEach((photo, index) => {
         const previewDiv = document.createElement('div');
         previewDiv.className = 'me-2 mb-2';
         previewDiv.innerHTML = `
-            <img src="${dataURL}" class="img-thumbnail" style="width: 100px; height: 100px; object-fit: cover;">
+            <img src="${photo.dataURL}" class="img-thumbnail" style="width: 100px; height: 100px; object-fit: cover;">
             <button type="button" class="btn btn-sm btn-danger mt-1 remove-photo" data-index="${index}">Eliminar</button>
             <button type="button" class="btn btn-sm btn-warning mt-1 flip-photo" data-index="${index}">Girar</button>
         `;
         photoPreviews.appendChild(previewDiv);
 
-        previewDiv.querySelector('.remove-photo').addEventListener('click', function() {
+        previewDiv.querySelector('.remove-photo').addEventListener('click', function () {
             const idx = parseInt(this.getAttribute('data-index'));
             selectedPhotos.splice(idx, 1);
             updatePreviews();
         });
 
-        previewDiv.querySelector('.flip-photo').addEventListener('click', async function() {
+        previewDiv.querySelector('.flip-photo').addEventListener('click', async function () {
             const idx = parseInt(this.getAttribute('data-index'));
             try {
-                selectedPhotos[idx] = await rotateImage(selectedPhotos[idx]);
-                updatePreviews();
+                const rotated = await rotateImage(selectedPhotos[idx].dataURL);
+                // Después de rotar, necesitamos recalcular width y height
+                const img = new Image();
+                img.onload = () => {
+                    selectedPhotos[idx] = { dataURL: rotated, width: img.height, height: img.width }; // Rotar intercambia width y height
+                    updatePreviews();
+                };
+                img.src = rotated;
             } catch (error) {
                 console.error('Error flipping image:', error);
             }
@@ -242,6 +260,12 @@ async function downloadPDF() {
     const datetime = document.getElementById('datetime').value;
 
     const tipoIncidente = document.querySelector('input[name="tipoIncidente"]:checked');
+
+    // Validación para radio button obligatorio
+    if (!tipoIncidente) {
+        alert('Es obligatorio marcar el tipo de incidente.');
+        return;
+    }
 
     const descripcion = document.getElementById('descripcion').value.trim();
 
@@ -269,23 +293,23 @@ async function downloadPDF() {
         pdf.addImage(reportImageData, 'JPEG', 0, 0, 210, 297);
 
         pdf.setFontSize(12);
-        pdf.text(name, 60, 68);
+        pdf.text(name, 60, 67.9);
 
-        pdf.text(rut, 60, 73);
+        pdf.text(rut, 60, 73.4);
 
         pdf.text(area, 60, 79);
 
-        pdf.text(sede, 60, 85);
+        pdf.text(sede, 60, 84.6);
 
-        pdf.text(tipo, 60, 120);
+        pdf.text(tipo, 60, 120.5);
 
-        pdf.text(ubicacion, 60, 128);
+        pdf.text(ubicacion, 60, 128.5);
 
-        pdf.text(dia, 60, 136);
+        pdf.text(dia, 60, 136.5);
 
         pdf.text(horario, 60, 145);
 
-        pdf.text(patente,147, 120);
+        pdf.text(patente, 147, 120.5);
 
         pdf.text(declarante, 45, 258.5)
 
@@ -298,7 +322,7 @@ async function downloadPDF() {
 
         // Add radio button selection to PDF
         if (tipoIncidente.value === '0') {
-            pdf.text('X', 150, 72); // Position for value 0, a bit higher
+            pdf.text('X', 150, 72.5); // Position for value 0, a bit higher
         } else if (tipoIncidente.value === '1') {
             pdf.text('X', 150, 78); // Position for value 1, a bit lower
         }
@@ -343,25 +367,28 @@ async function downloadPDF() {
                     const imgHeight = 220;
                     const startX = marginLeft + (usableWidth - imgWidth) / 2;
                     const startY = marginTop + (usableHeight - imgHeight) / 2;
-                    pdf.addImage(selectedPhotos[i], 'JPEG', startX, startY, imgWidth, imgHeight);
+                    pdf.addImage(selectedPhotos[i].dataURL, 'JPEG', startX, startY, imgWidth, imgHeight);
                 } else if (numPhotos === 2) {
-                    // Dos fotos en formato de grid horizontal, agrandadas aprovechando toda la hoja
-                    const cols = 2;
-                    const rows = 1;
-                    const cellWidth = 85;
-                    const cellHeight = 220;
+                    // Dos fotos en formato de grid vertical, escaladas proporcionalmente para no estirar y aprovechar más espacio
+                    const cols = 1;
+                    const rows = 2;
+                    const cellWidth = 170;
+                    const cellHeight = 110;
                     const totalGridWidth = cols * cellWidth;
                     const totalGridHeight = rows * cellHeight;
                     const startX = marginLeft + (usableWidth - totalGridWidth) / 2;
                     const startY = marginTop + (usableHeight - totalGridHeight) / 2;
                     for (let j = 0; j < numPhotos; j++) {
-                        const imgData = selectedPhotos[i + j];
-                        const x = startX + (j % cols) * cellWidth;
-                        const y = startY + Math.floor(j / cols) * cellHeight;
-                        pdf.addImage(imgData, 'JPEG', x, y, cellWidth, cellHeight);
+                        const photo = selectedPhotos[i + j];
+                        const scale = Math.min(cellWidth / photo.width, cellHeight / photo.height);
+                        const actualWidth = photo.width * scale;
+                        const actualHeight = photo.height * scale;
+                        const x = startX + (j % cols) * cellWidth + (cellWidth - actualWidth) / 2;
+                        const y = startY + Math.floor(j / cols) * cellHeight + (cellHeight - actualHeight) / 2;
+                        pdf.addImage(photo.dataURL, 'JPEG', x, y, actualWidth, actualHeight);
                     }
                 } else {
-                    // Tres o cuatro fotos en grid de 2x2, agrandadas aprovechando toda la hoja
+                    // Tres o cuatro fotos en grid de 2x2, escaladas proporcionalmente para no estirar
                     const cols = 2;
                     const rows = 2;
                     const cellWidth = 85;
@@ -371,17 +398,20 @@ async function downloadPDF() {
                     const startX = marginLeft + (usableWidth - totalGridWidth) / 2;
                     const startY = marginTop + (usableHeight - totalGridHeight) / 2;
                     for (let j = 0; j < numPhotos; j++) {
-                        const imgData = selectedPhotos[i + j];
-                        const x = startX + (j % cols) * cellWidth;
-                        const y = startY + Math.floor(j / cols) * cellHeight;
-                        pdf.addImage(imgData, 'JPEG', x, y, cellWidth, cellHeight);
+                        const photo = selectedPhotos[i + j];
+                        const scale = Math.min(cellWidth / photo.width, cellHeight / photo.height);
+                        const actualWidth = photo.width * scale;
+                        const actualHeight = photo.height * scale;
+                        const x = startX + (j % cols) * cellWidth + (cellWidth - actualWidth) / 2;
+                        const y = startY + Math.floor(j / cols) * cellHeight + (cellHeight - actualHeight) / 2;
+                        pdf.addImage(photo.dataURL, 'JPEG', x, y, actualWidth, actualHeight);
                     }
                 }
             }
         }
 
         // Descargar el PDF
-        pdf.save('reporte_con_firma.pdf');
+        pdf.save('reporte_incidenteS.pdf');
     } catch (error) {
         alert('Error al cargar la imagen del reporte: ' + error.message);
     }
